@@ -1,0 +1,17 @@
+[project]
+name = "knowledge_rep"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "aima>=2024.9.28",
+    "pytest>=8.4.2",
+    "ruff>=0.13.1",
+    "tensorflow",
+]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'"
+]
