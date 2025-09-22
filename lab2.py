@@ -110,3 +110,131 @@ farmer = TraceAgent(TableDrivenFarmerAgent())
 environment = TrivialRiverCrossingEnvironment()
 environment.add_thing(farmer, loc_A)
 environment.run(20)
+
+#  QUESTION 2
+#  PEAS Table
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+# | Agent Type             | Performance          | Environment  | Actuators                   | Sensors                                  |
+# |                        | Measure              |              |                             |                                          |
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+# | RandomVacuumAgent      | Ratio of clean tiles | 2 tile world | Move left or right (wheels) | None (ignored)                           |
+# |                        | to moves made        |              | Suck up dirt (vacuum hose)  |                                          |
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+# | TableDrivenVacuumAgent | Ratio of clean tiles | 2 tile world | Move left or right (wheels) | Location, Status of tile (clean / dirty) |
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+# |                        | to moves made        |              | Suck up dirt (vacuum hose)  | Hardcoded in advance                     |
+# | ReflexVacuumAgent      | Ratio of clean tiles | 2 tile world | Move left or right (wheels) | Location, Status of tile (clean / dirty) |
+# |                        | to moves made        |              | Suck up dirt (vacuum hose)  | Reactive to immediate input              |
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+# | ModelBasedVacuumAgent  | Ratio of clean tiles | 2 tile world | Move left or right (wheels) | Location, Status of tile (clean / dirty) |
+# |                        | to moves made        |              | Suck up dirt (vacuum hose)  | Prior knowledge of world                 |
+# +------------------------+----------------------+--------------+-----------------------------+------------------------------------------+
+
+# Comparative Analysis
+test_agents = [RandomVacuumAgent, TableDrivenVacuumAgent, ReflexVacuumAgent, ModelBasedVacuumAgent]
+environment = TrivialVacuumEnvironment
+analysis = compare_agents(environment, test_agents, 24, 1000)
+results = {
+    tup[0].__name__: tup[1] for tup in analysis
+}
+print(results)
+
+max_score = max(results.values())
+min_score = min(results.values())
+
+best_performer = [key for key in results if results[key] == max_score]
+worst_performer = [key for key in results if results[key] == min_score]
+
+print(f"best performance was {best_performer} with {max_score}")
+print(f"worst performance was {worst_performer} with {min_score}")
+
+# Agent Performance
+# RandomVacuumAgent ignores all its percepts and so this results in poor performance,
+# as it will move regardless of the tile status. This can mean many needless moves.
+# However it doesn't perform as poorly as ReflexVacuumAgent. ReflexVacuumAgent can get
+# stuck in a loop as it is only concerned with the current state, and doesn't have 
+# the ability to make a Noop action like ModelBasedVacuumAgent. In comparison to 
+# RandomVacuumAgent, it doesn't have the ability to make a random choice to break
+# out of the loop.
+# TableDrivenVacuumAgent & ModelBasedVacuumAgent both take into account the history
+# of the world, ModelBasedVacuumAgent does this by maintaining internal state whereas 
+# TableDrivenVacuumAgent has the actions hardcoded ahead of time in its percept sequence.
+
+# QUESTION 3
+class OneDimensionalVacuumEnvironment(VacuumEnvironment):
+    def __init__(self, width=10):
+        super().__init__(width, 0)
+        self.add_walls()
+
+    def thing_classes(self):
+        return [Wall, Dirt, ReflexVacuumAgent, RandomVacuumAgent, ModelBasedVacuumAgent]
+    
+    def add_walls(self):
+        self.add_thing(Wall(), (0, 0))
+        self.add_thing(Wall(), (self.width - 1, 0))
+        # Updates iteration start and end (with walls).
+        self.x_start, self.y_start = (1, 0)
+        self.x_end, self.y_end = (self.width - 1, 0)
+
+    def execute_action(self, agent, action):
+        agent.bump = False
+        if action == 'Suck':
+            dirt_list = self.list_things_at(agent.location, Dirt)
+            if dirt_list != []:
+                dirt = dirt_list[0]
+                agent.performance += 100
+                self.delete_thing(dirt)
+        elif action == 'Forward':
+            x, y = agent.location
+            agent.bump = self.move_to(agent, (x + 1, 0))
+
+        if action != 'NoOp':
+            agent.performance -= 1
+
+
+
+def OneDimRandomVacuumAgent():
+    return Agent(RandomAgentProgram(['Forward', 'Suck', 'NoOp']))
+
+def OneDimReflexVacuumAgent():
+    def program(percept):
+        status, obstacle = percept
+        if status == 'Dirty':
+            return 'Suck'
+        elif status == 'Clean' and obstacle == 'None':
+            return 'Forward'
+        elif status == 'Clean' and obstacle == 'Bump':
+            return 'Noop'
+    return Agent(program)
+
+def OneDimModelBasedVacuumAgent():
+    model = []
+
+    def program(percept):
+        status, obstacle = percept
+        model.append(obstacle)
+        if model.count('Bump') == 2:
+            return 'Noop'
+        elif status == 'Clean' and obstacle == 'Bump':
+            return 'NoOp'
+        elif status == 'Dirty':
+            return 'Suck'
+    return Agent(program)
+
+one_dim_agents = [OneDimRandomVacuumAgent, OneDimReflexVacuumAgent, OneDimModelBasedVacuumAgent]
+one_dim_environment = OneDimensionalVacuumEnvironment
+one_dim_analysis = compare_agents(one_dim_environment, one_dim_agents)
+print(one_dim_analysis)
+one_dim_results = {
+    tup[0].__name__: tup[1] for tup in one_dim_analysis
+}
+print(one_dim_results)
+
+one_dim_max_score = max(one_dim_results.values())
+one_dim_min_score = min(one_dim_results.values())
+
+best = [key for key in one_dim_results if one_dim_results[key] == one_dim_max_score]
+worst = [key for key in one_dim_results if one_dim_results[key] == one_dim_min_score]
+
+print(f"best performance was {best} with {one_dim_max_score}")
+print(f"worst performance was {worst} with {one_dim_min_score}")
